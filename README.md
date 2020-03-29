@@ -4,7 +4,7 @@ Repositório dedicado ao aprendizado de _Machine Learning_ usando PyCharm e Jupy
 
 ## :pencil: Versionamento
 
-Eu uso [Git](https://git-scm.com/) para versionamento.
+Eu uso [Git <img src="https://raw.github.com/newtmagalhaes/Aprendendo-Linguagens/master/images/logos/git.svg?sanitize=true" width="15">](https://git-scm.com/) para versionamento.
 
 ## :octocat: Autor
 
