@@ -1,10 +1,10 @@
 # :robot: Machine-Learning
 
-Repositório dedicado ao aprendizado de _Machine Learning_ usando [Jupyter Notebook](./ML/jupyter) e [Spyder](./ML/spyder).
+Repositório dedicado ao aprendizado de _Machine Learning_ usando [Jupyter Notebook](./ML/jupyter).
 
-## :snake: Machine Learning Environment
+## :snake: Machine Learning Virtual Environment
 
-O ambiente foi preparado utilizando **Python 3.7**, **scikit-learn 0.22.1**, **pandas 1.0.3** e **matplotlib 3.2.1**.
+O ambiente foi preparado utilizando [requirements.txt](./requirements.txt).
 
 ## :pencil: Versionamento
 
