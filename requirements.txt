@@ -102,3 +102,4 @@ https://repo.anaconda.com/pkgs/main/linux-64/numpy-1.18.1-py37h4f9e942_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/pandas-1.0.3-py37h0573a6f_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/scipy-1.4.1-py37h0b6359f_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/scikit-learn-0.22.1-py37hd81dba3_0.conda
+https://repo.anaconda.com/pkgs/main/noarch/seaborn-0.10.1-py_0.conda
