@@ -1,6 +1,9 @@
 # vscode config
 .vscode
 
+# ignore zip files
+*.zip
+
 # github gitignore
 
 # Byte-compiled / optimized / DLL files
