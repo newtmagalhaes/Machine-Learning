@@ -1,6 +1,9 @@
 # vscode config
 .vscode
 
+# ignore large file
+ML/f02-chb/feature_set/chb.csv
+
 # ignore zip files
 *.zip
 
