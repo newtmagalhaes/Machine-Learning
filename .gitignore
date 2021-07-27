@@ -4,6 +4,9 @@
 # ignore large file
 ML/f02-chb/feature_set/chb.csv
 
+# ignore csv folders
+ML/f04-textura/**/csvs/
+
 # ignore zip files
 *.zip
 
