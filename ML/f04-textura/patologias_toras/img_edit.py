@@ -1,33 +1,46 @@
 import numpy as np
-from typing import Tuple
 from scipy.stats import mode
 from skimage.feature import canny
 from skimage.filters import threshold_otsu
 from skimage.transform import hough_line, hough_line_peaks, rotate
 
 
-def best_rgb(img:np.ndarray) -> Tuple[int, int]:
-  soma_vertical_R, soma_vertical_G, soma_vertical_B = img.sum(axis=0).transpose()
-  soma_horizontal_R, soma_horizontal_G, soma_horizontal_B = img.sum(axis=1).transpose()
-  
-  v = [arr.max() - arr.min() for arr in [soma_vertical_R, soma_vertical_G, soma_vertical_B]]
-  max_diff = 0
-  for i, diff in enumerate(v):
-    if diff > max_diff:
-      max_diff = diff
-      best_v = i
+def best_rgb(img:np.ndarray) -> 'tuple[int, int]':
+  '''
+  ## Parâmetros
+  - img: imagem RGB do tipo ndarray com o shape (height, width, 3).
 
-  h = [arr.max() - arr.min() for arr in [soma_horizontal_R, soma_horizontal_G, soma_horizontal_B]]
-  max_diff = 0
-  for i, diff in enumerate(h):
-    if diff > max_diff:
-      max_diff = diff
-      best_h = i
+  ## Retorna
+  Uma dupla com qualquer combinação de 0, 1 ou 2, índices associados
+  respectivamente com R, G e B, indicando para cada eixo,
+  respectivamente VERTICAL e HORIZONTAL, qual a cor com maior
+  variação.
+  '''
+  VERTICAL, HORIZONTAL = 0, 1
+  cores = []
+  for eixo in [VERTICAL, HORIZONTAL]:
+    soma_R, soma_G, soma_B = img.sum(axis=eixo).transpose()
+    diferencas = [arr.max() - arr.min() for arr in [soma_R, soma_G, soma_B]]
+    
+    max_diff = 0
+    for i, diff in enumerate(diferencas):
+      if diff > max_diff:
+        max_diff = diff
+        melhor_cor = i
 
-  return best_v, best_h
+    cores.append(melhor_cor)
+
+  return tuple(cores)
 
 
 def find_tilt_angle(image_edges:np.ndarray) -> float:
+  '''
+  Recebe uma imagem 2D binarizada.
+
+  ## Retorna
+  Um ângulo em graus de uma linha identficada pela transformada de
+  Hough.
+  '''
   h, theta, d = hough_line(image_edges)
   accum, angles, dists = hough_line_peaks(h, theta, d)
   angle = np.rad2deg(mode(angles)[0][0])
@@ -37,35 +50,43 @@ def find_tilt_angle(image_edges:np.ndarray) -> float:
 
 def crop_empty_edges(img:np.ndarray) -> np.ndarray:
   '''
-  ---
-  - img: np.ndarray 2D image
+  Dado uma imagem 2D que após ser rotacionada apresenta "triângulos
+  pretos" em suas bordas, busca cortar essas partes da imagem.
+  
+  ## Parâmetros
+  - img: uma matriz 2D representando a imagem;
+
+  ## Retorna
+  Uma nova imagem 2D, um recorte da original.
   '''
-  top_left, top_right = 0, 0
-  while img[top_left, 0] == 0:
-    top_left += 1
-  while img[top_right, -1] == 0:
-    top_right += 1
-  
-  bot_left, bot_right = len(img) - 1, len(img) - 1
-  while img[bot_left, 0] == 0:
-    bot_left -= 1
-  while img[bot_right, 0] == 0:
-    bot_right -= 1
+  CANTOS = ['top_left', 'top_right', 'bot_left', 'bot_right']
+  BORDAS_DICT = {s:0 if i < 2 else len(img) - 1 for i, s in enumerate(CANTOS)}
 
-  max_top = max(top_left, top_right)
-  min_bot = min(bot_left, bot_right)
-  new_height = min_bot - max_top
-  width = len(img[0])
-  new_img = np.zeros((new_height, width))
+  for i, edge in enumerate(BORDAS_DICT):
+    e = - (i % 2)
+    while img[BORDAS_DICT[edge], e] == 0:
+      BORDAS_DICT[edge] += 1 if i < 2 else -1
 
-  for i in range(new_height):
-    for j in range(width):
-      new_img[i, j] = img[i + max_top, j]
+  max_top = max(BORDAS_DICT['top_left'], BORDAS_DICT['top_right'])
+  min_bot = min(BORDAS_DICT['bot_left'], BORDAS_DICT['bot_right'])
   
-  return new_img
+  return img[max_top:min_bot+1].copy()
 
 
 def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
+  '''
+  Cria a partir de uma imagem RGB outra com apenas uma das cores.
+
+  ## Parâmetros
+  - img: ndarray de shape (height, width, 3);
+  - color: {0, 1, 2}, indicando respectivamente qual cor: R, G ou B
+  se deseja criar a nova imagem.
+
+  ## Retorna
+  Uma nova imagem 2D onde cada píxel na coordenada x, y contém o
+  respectivo valor com cor indicada
+  (`img[x, y, color] == new_img[x, y]`).
+  '''
   height, width, _ = img.shape
   new_img = np.zeros(shape=(height, width))
 
@@ -75,10 +96,20 @@ def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
   
   return new_img
 
-def auto_rotate_and_crop(img:np.ndarray) -> Tuple[np.ndarray, float]:
+def auto_rotate_and_crop(img:np.ndarray) -> 'tuple[np.ndarray, float]':
   '''
-  ---
-  - img: np.ndarray 2D image
+  Dado uma imagem 2D, binariza com limiar de OTSU, passa pelo filtro
+  de canny, rotaciona com o ângulo calculado pela transformada de
+  Hough e corta os espaços vazios gerados pela rotação
+  
+  ## Parâmetros
+  - img: imagem 2D.
+
+  ## Retorna
+  Uma imagem e o ângulo de rotação (em graus), no qual a imagem é:
+  - uma nova, rotacionada e recortada se o ângulo identificado for
+  diferente de 0;
+  - a mesma imagem se o ângulo identificado for 0.
   '''
   # binarizando com otsu
   img_ostu = img >= threshold_otsu(img)
@@ -86,9 +117,18 @@ def auto_rotate_and_crop(img:np.ndarray) -> Tuple[np.ndarray, float]:
   # encontrando bordas
   edges = canny(img_ostu)
 
-  # Rotacionando imagem
+  # Rotacionando imagem se for preciso
   angle = find_tilt_angle(edges)
-  new_img = rotate(img, angle)
+  if angle != 0:
+    new_img = rotate(img, angle)
+    crop_img = crop_empty_edges(new_img)
+    return crop_img, angle
+  else:
+    return img, 0
 
-  crop_img = crop_empty_edges(new_img)
-  return crop_img, angle
+
+if __name__ == '__main__':
+  a = [1, 2, 3]
+  print(f'a: {a}\t-\ttipo: {type(a)}')
+  b = tuple(a)
+  print(f'b: {b}\t-\ttipo: {type(b)}')
