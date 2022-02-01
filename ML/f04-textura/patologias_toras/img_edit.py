@@ -4,6 +4,8 @@ from skimage.feature import canny
 from skimage.filters import threshold_otsu
 from skimage.transform import hough_line, hough_line_peaks, rotate
 
+LIMITE_DE_NORMALIZACAO = 8
+
 
 def best_rgb(img:np.ndarray) -> 'tuple[int, int]':
   '''
@@ -20,20 +22,36 @@ def best_rgb(img:np.ndarray) -> 'tuple[int, int]':
   cores = []
   for eixo in [VERTICAL, HORIZONTAL]:
     soma_R, soma_G, soma_B = img.sum(axis=eixo).transpose()
-    diferencas = [arr.max() - arr.min() for arr in [soma_R, soma_G, soma_B]]
-    
-    max_diff = 0
-    for i, diff in enumerate(diferencas):
-      if diff > max_diff:
-        max_diff = diff
-        melhor_cor = i
-
-    cores.append(melhor_cor)
+    variancias = np.array([arr.var() for arr in [soma_R, soma_G, soma_B]])
+    cores.append(variancias.argmax())
 
   return tuple(cores)
 
 
-def find_tilt_angle(image_edges:np.ndarray) -> float:
+def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
+  '''
+  Cria a partir de uma imagem RGB outra com apenas uma das cores.
+
+  ## Parâmetros
+  - img: ndarray de shape (height, width, 3);
+  - color: {0, 1, 2}, indicando respectivamente qual cor: R, G ou B
+  se deseja criar a nova imagem.
+
+  ## Retorna
+  Uma nova imagem 2D onde cada píxel na coordenada x, y contém o
+  respectivo valor com cor indicada
+  (`img[x, y, color] == new_img[x, y]`).
+  '''
+  height, width, _ = img.shape
+  new_img = np.zeros(shape=(height, width))
+  for i in range(height):
+    for j in range(width):
+      new_img[i, j] = img[i, j, color]
+  
+  return new_img
+
+
+def _find_tilt_angle(image_edges:np.ndarray) -> float:
   '''
   Recebe uma imagem 2D binarizada.
 
@@ -73,30 +91,90 @@ def crop_empty_edges(img:np.ndarray) -> np.ndarray:
   return img[max_top:min_bot+1].copy()
 
 
-def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
+def fill_empty_edges(img:np.ndarray, fill_value:float=None) -> np.ndarray:
   '''
-  Cria a partir de uma imagem RGB outra com apenas uma das cores.
-
-  ## Parâmetros
-  - img: ndarray de shape (height, width, 3);
-  - color: {0, 1, 2}, indicando respectivamente qual cor: R, G ou B
-  se deseja criar a nova imagem.
-
-  ## Retorna
-  Uma nova imagem 2D onde cada píxel na coordenada x, y contém o
-  respectivo valor com cor indicada
-  (`img[x, y, color] == new_img[x, y]`).
   '''
-  height, width, _ = img.shape
-  new_img = np.zeros(shape=(height, width))
-
-  for i in range(height):
-    for j in range(width):
-      new_img[i, j] = img[i, j, color]
+  h = img.shape[0] - 1
+  w = img.shape[1] - 1
+  new_img = img.copy()
+  # canto: x_direcao, y_direcao, row_start, col_start
+  CANTOS = {'top_left':(1, 1, 0, 0),
+            'top_right':(1, -1, 0, w)}
+  if fill_value is None:
+    fill_value = new_img.mean()
+  
+  for canto in CANTOS:
+    row_direcao, col_direcao, row_start, col_start = CANTOS[canto]
+    row, col = row_start, col_start
+    
+    while new_img[row, col] == 0 and (0 <= row <= h):
+      while new_img[row, col] == 0 and (0 <= col <= w):
+        new_img[row, col] = fill_value
+        # canto oposto da figura
+        new_img[h - row, w - col] = fill_value
+        col += col_direcao
+      col = col_start
+      row += row_direcao
   
   return new_img
 
-def auto_rotate_and_crop(img:np.ndarray) -> 'tuple[np.ndarray, float]':
+
+
+def crop_horizontal(img:np.ndarray,
+                    soma_horizontal:np.ndarray,
+                    metodo:int=0,
+                    norm:int=LIMITE_DE_NORMALIZACAO) -> np.ndarray:
+  '''
+  '''
+  soma_normalizada = soma_horizontal * (norm - 1)/soma_horizontal.max()
+  hist, bins = np.histogram(soma_normalizada, range(LIMITE_DE_NORMALIZACAO), density=False)
+  
+  # intervalo = início do intervalo do pico do histograma SE (pos < n/2)
+  # intervalo = fim do intervalo do pico do histograma SE (pos >= n/2)
+  # intervalo = bins[pos + int(pos < n/2)]
+  pos = hist.argmax()
+  a = soma_normalizada[soma_normalizada>=bins[pos]]
+  bar:np.ndarray = a[a<bins[pos]+1]
+  
+  if metodo == 0:
+    ajuste = 0.5
+  elif metodo == 1:
+    ajuste = bar.mean() + bar.var() - bins[pos]
+  else:
+    ajuste = 0
+
+  # Verificando onde se concentram os dados
+  esquerda = hist[:pos].sum()
+  direita = hist[pos+1:].sum()
+  if esquerda >= direita:
+    ajuste *= -1
+    intervalo = bins[pos]
+    stop_cond = lambda x, y_bar: x < y_bar
+  else:
+    intervalo = bins[pos+1]
+    stop_cond = lambda x, y_bar: x > y_bar
+  
+  limiar = intervalo + ajuste
+
+  # Percorrendo imagem para traçar corte
+  # de cima para baixo
+  pos_corte = [0, 0]
+  for j, v in enumerate(soma_normalizada):
+    if stop_cond(v, limiar):
+      pos_corte[0] = j
+      break
+  # de baixo para cima
+  for j, v in enumerate(soma_normalizada[::-1]):
+    if stop_cond(v, limiar):
+      pos_corte[0] = (len(soma_horizontal) - 1) - j
+      break
+  
+  start, stop = pos_corte
+  return img[start:stop].copy()
+
+
+
+def auto_rotate(img:np.ndarray) -> 'tuple[np.ndarray, float]':
   '''
   Dado uma imagem 2D, binariza com limiar de OTSU, passa pelo filtro
   de canny, rotaciona com o ângulo calculado pela transformada de
@@ -118,11 +196,11 @@ def auto_rotate_and_crop(img:np.ndarray) -> 'tuple[np.ndarray, float]':
   edges = canny(img_ostu)
 
   # Rotacionando imagem se for preciso
-  angle = find_tilt_angle(edges)
+  angle = _find_tilt_angle(edges)
   if angle != 0:
     new_img = rotate(img, angle)
-    crop_img = crop_empty_edges(new_img)
-    return crop_img, angle
+    # crop_img = crop_empty_edges(new_img)
+    return new_img, angle
   else:
     return img, 0
 
