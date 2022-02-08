@@ -91,30 +91,46 @@ def crop_empty_edges(img:np.ndarray) -> np.ndarray:
   return img[max_top:min_bot+1].copy()
 
 
-def fill_empty_edges(img:np.ndarray, fill_value:float=None) -> np.ndarray:
+def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
   '''
   '''
   h = img.shape[0] - 1
   w = img.shape[1] - 1
-  new_img = img.copy()
+  new_img:np.ndarray = img.copy()
   # canto: x_direcao, y_direcao, row_start, col_start
   CANTOS = {'top_left':(1, 1, 0, 0),
-            'top_right':(1, -1, 0, w)}
-  if fill_value is None:
-    fill_value = new_img.mean()
-  
+            'top_right':(1, -1, 0, w),
+            'bot_left':(-1, 1, h, 0),
+            'bot_right':(-1, -1, h, w)}
+
   for canto in CANTOS:
     row_direcao, col_direcao, row_start, col_start = CANTOS[canto]
     row, col = row_start, col_start
     
-    while new_img[row, col] == 0 and (0 <= row <= h):
-      while new_img[row, col] == 0 and (0 <= col <= w):
-        new_img[row, col] = fill_value
-        # canto oposto da figura
-        new_img[h - row, w - col] = fill_value
-        col += col_direcao
-      col = col_start
-      row += row_direcao
+    if metodo == 0:
+      fill_value = new_img.mean()
+      while new_img[row, col] == 0 and (0 <= row <= h):
+        while new_img[row, col] == 0 and (0 <= col <= w):
+          new_img[row, col] = fill_value
+          # canto oposto da figura
+          new_img[h - row, w - col] = fill_value
+          col += col_direcao
+        col = col_start
+        row += row_direcao
+    
+    elif metodo == 1:
+      while new_img[row, col].all() == 0 and (0 <= row <= h):
+        while new_img[row, col].all() == 0 and (0 <= col <= w):
+          col += col_direcao
+        # canto vazio recebe o espelho do que está na mesma linha
+        diff = abs(col_start - col)
+        new_img[row, col_start:col:col_direcao] = new_img[row, col:col+col_direcao*diff:col_direcao]
+        # for c in range(diff):
+        #   new_img[row, col_start+col_direcao*c] = new_img[row, col+col_direcao*c]
+        row += row_direcao
+        col = col_start
+    else:
+      print('método errado!!')
   
   return new_img
 
