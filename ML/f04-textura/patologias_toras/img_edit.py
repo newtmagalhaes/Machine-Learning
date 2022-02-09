@@ -93,44 +93,61 @@ def crop_empty_edges(img:np.ndarray) -> np.ndarray:
 
 def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
   '''
-  '''
-  h = img.shape[0] - 1
-  w = img.shape[1] - 1
-  new_img:np.ndarray = img.copy()
-  # canto: x_direcao, y_direcao, row_start, col_start
-  CANTOS = {'top_left':(1, 1, 0, 0),
-            'top_right':(1, -1, 0, w),
-            'bot_left':(-1, 1, h, 0),
-            'bot_right':(-1, -1, h, w)}
+  # Preencher cantos vazios
+  Recebe uma imagem (rotacionada) que possua vazios nos cantos devido
+  à rotação aplicada.
 
-  for canto in CANTOS:
-    row_direcao, col_direcao, row_start, col_start = CANTOS[canto]
-    row, col = row_start, col_start
+  ## Parâmetros
+  - `img`: imagem, representada por uma matriz 2D onde cada elemento é:
+    * um número: quando a imagem está em escala de cinza, por exemplo;
+    * uma tripla: onde cada número da tripla representa a intensidade
+    de cada cor (RGB, respectivavmente);
+  
+  - `metodo`: inteiro definindo qual método será aplicado para
+  preencher os vazios presentes nas bordas:
+    * 0: preencher com média da intensidade dos píxels;
+    * 1: preencher com cópia da imagem ao lado;
+    * outro: opção inválida, nada será feito.
+  '''
+  # (h) altura e (w) comprimento da imagem
+  h, w = img.shape[0:2] - 1
+  new_img:np.ndarray = img.copy()
+
+  # Sistema de coordenadas da imagem tem origem (0, 0) no canto
+  # superior esquerdo da imagem e cresce para a direita e para
+  # baixo.
+  # 'canto': row_start, row_direcao, col_start, col_direcao.
+  CANTOS = {'top_left' :(0,  1, 0,  1),
+            'top_right':(0,  1, w, -1),
+            'bot_left' :(h, -1, 0,  1),
+            'bot_right':(h, -1, w, -1)}
+  
+  if metodo == 0:
+    # preencher com média da intensidade dos píxels da imagem
+    _met = lambda linha=0, coluna=0, col_inicio=0, passo=1: new_img.mean()
+  elif metodo == 1:
+    # preenche com cópia da imagem ao lado
+    _met = lambda linha=0, coluna=0, col_inicio=0, passo=1: new_img[linha, coluna:2*coluna-col_inicio:passo]
+  else:
+    # opção inválida, nada será feito
+    print('método errado!!')
+    return new_img
+
+  for canto in CANTOS.values:
+    row_start, row_direcao, col_start, col_direcao = canto
+    row, col = row_start, col_start # contadores
     
-    if metodo == 0:
-      fill_value = new_img.mean()
-      while new_img[row, col] == 0 and (0 <= row <= h):
-        while new_img[row, col] == 0 and (0 <= col <= w):
-          new_img[row, col] = fill_value
-          # canto oposto da figura
-          new_img[h - row, w - col] = fill_value
-          col += col_direcao
-        col = col_start
-        row += row_direcao
-    
-    elif metodo == 1:
-      while new_img[row, col].all() == 0 and (0 <= row <= h):
-        while new_img[row, col].all() == 0 and (0 <= col <= w):
-          col += col_direcao
-        # canto vazio recebe o espelho do que está na mesma linha
-        diff = abs(col_start - col)
-        new_img[row, col_start:col:col_direcao] = new_img[row, col:col+col_direcao*diff:col_direcao]
-        # for c in range(diff):
-        #   new_img[row, col_start+col_direcao*c] = new_img[row, col+col_direcao*c]
-        row += row_direcao
-        col = col_start
-    else:
-      print('método errado!!')
+    # Enquanto contadores estão no intervalo \
+    # AND o píxel atual for preto (grayscale:0 e RGB:(0,0,0))
+    while (0 <= row <= h) and new_img[row, col].all() == 0:
+      while (0 <= col <= w) and new_img[row, col].all() == 0:
+        col += col_direcao
+
+      # Preenche uma linha horizontal do canto por vez
+      new_img[row, col_start:col:col_direcao] = _met(row, col, col_start, col_direcao)
+
+      col = col_start
+      row += row_direcao
   
   return new_img
 
