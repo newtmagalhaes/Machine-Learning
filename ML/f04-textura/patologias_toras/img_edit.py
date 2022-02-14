@@ -110,7 +110,7 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
     * outro: opção inválida, nada será feito.
   '''
   # (h) altura e (w) comprimento da imagem
-  h, w = img.shape[0:2] - 1
+  h, w = np.array(img.shape[0:2]) - 1
   new_img:np.ndarray = img.copy()
 
   # Sistema de coordenadas da imagem tem origem (0, 0) no canto
@@ -133,8 +133,8 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
     print('método errado!!')
     return new_img
 
-  for canto in CANTOS.values:
-    row_start, row_direcao, col_start, col_direcao = canto
+  for canto in CANTOS:
+    row_start, row_direcao, col_start, col_direcao = CANTOS[canto]
     row, col = row_start, col_start # contadores
     
     # Enquanto contadores estão no intervalo \
@@ -152,22 +152,38 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
   return new_img
 
 
-
 def crop_horizontal(img:np.ndarray,
                     soma_horizontal:np.ndarray,
                     metodo:int=0,
-                    norm:int=LIMITE_DE_NORMALIZACAO) -> np.ndarray:
+                    norm:int=LIMITE_DE_NORMALIZACAO,
+                    return_thresholds:bool=False) -> 'np.ndarray | tuple[int, int]':
   '''
+  # Crop horizontal
+
+  ## Parâmetros
+  - `img`: imagem, representada como uma matriz 2D
+  - `soma_horizontal`: um array (1D) onde o elemento `i` corresponde ao
+  somatório da linha `i` (equivale a `img.sum(axis=1)`)
+  - `metodo`: inteiro definindo qual método será aplicado para definir
+  o ajuste (+ ou -, na direção onde os dados se concentram):
+    * 0: 0.5
+    * 1: `média+variância - base` (base = início do intervalo do pico)
+    * outro: sem ajuste
+  - `norm`: Constante para normalização da `soma_horizontal`
+  - `return_thresholds`: opção de retorno (False por padrão):
+    * True: tupla com os pontos de corte da imagem;
+    * False: cópia da imagem recortada.
   '''
   soma_normalizada = soma_horizontal * (norm - 1)/soma_horizontal.max()
+  n = len(soma_horizontal) - 1
   hist, bins = np.histogram(soma_normalizada, range(LIMITE_DE_NORMALIZACAO), density=False)
   
   # intervalo = início do intervalo do pico do histograma SE (pos < n/2)
   # intervalo = fim do intervalo do pico do histograma SE (pos >= n/2)
   # intervalo = bins[pos + int(pos < n/2)]
   pos = hist.argmax()
-  a = soma_normalizada[soma_normalizada>=bins[pos]]
-  bar:np.ndarray = a[a<bins[pos]+1]
+  aux = soma_normalizada[soma_normalizada>=bins[pos]]
+  bar:np.ndarray = aux[aux<bins[pos+1]]
   
   if metodo == 0:
     ajuste = 0.5
@@ -191,7 +207,7 @@ def crop_horizontal(img:np.ndarray,
 
   # Percorrendo imagem para traçar corte
   # de cima para baixo
-  pos_corte = [0, 0]
+  pos_corte = [0, n]
   for j, v in enumerate(soma_normalizada):
     if stop_cond(v, limiar):
       pos_corte[0] = j
@@ -199,12 +215,14 @@ def crop_horizontal(img:np.ndarray,
   # de baixo para cima
   for j, v in enumerate(soma_normalizada[::-1]):
     if stop_cond(v, limiar):
-      pos_corte[0] = (len(soma_horizontal) - 1) - j
+      pos_corte[1] = n - j
       break
   
-  start, stop = pos_corte
-  return img[start:stop].copy()
-
+  if return_thresholds:
+    return pos_corte
+  else:
+    start, stop = pos_corte
+    return img[start:stop].copy()
 
 
 def auto_rotate(img:np.ndarray) -> 'tuple[np.ndarray, float]':
