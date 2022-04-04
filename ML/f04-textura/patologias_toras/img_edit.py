@@ -8,7 +8,7 @@ LIMITE_DE_NORMALIZACAO = 8
 
 
 def best_rgb(img:np.ndarray) -> 'tuple[int, int]':
-  '''
+  """
   ## Parâmetros
   - img: imagem RGB do tipo ndarray com o shape (height, width, 3).
 
@@ -17,7 +17,7 @@ def best_rgb(img:np.ndarray) -> 'tuple[int, int]':
   respectivamente com R, G e B, indicando para cada eixo,
   respectivamente VERTICAL e HORIZONTAL, qual a cor com maior
   variação.
-  '''
+  """
   VERTICAL, HORIZONTAL = 0, 1
   cores = []
   for eixo in [VERTICAL, HORIZONTAL]:
@@ -29,8 +29,9 @@ def best_rgb(img:np.ndarray) -> 'tuple[int, int]':
 
 
 def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
-  '''
-  Cria a partir de uma imagem RGB outra com apenas uma das cores.
+  """RGB para mono
+  ================
+  Cria uma imagem monocromática partir de outra RGB com apenas uma das cores.
 
   ## Parâmetros
   - img: ndarray de shape (height, width, 3);
@@ -41,7 +42,7 @@ def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
   Uma nova imagem 2D onde cada píxel na coordenada x, y contém o
   respectivo valor com cor indicada
   (`img[x, y, color] == new_img[x, y]`).
-  '''
+  """
   height, width, _ = img.shape
   new_img = np.zeros(shape=(height, width))
   for i in range(height):
@@ -52,13 +53,14 @@ def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
 
 
 def _find_tilt_angle(image_edges:np.ndarray) -> float:
-  '''
-  Recebe uma imagem 2D binarizada.
+  """Encontrar ângulo de inclinação
+  =================================
+  Recebe uma imagem 2D binarizada (após ser tratada pelo `canny`).
 
   ## Retorna
   Um ângulo em graus de uma linha identficada pela transformada de
   Hough.
-  '''
+  """
   h, theta, d = hough_line(image_edges)
   accum, angles, dists = hough_line_peaks(h, theta, d)
   angle = np.rad2deg(mode(angles)[0][0])
@@ -66,8 +68,54 @@ def _find_tilt_angle(image_edges:np.ndarray) -> float:
   return angle + 90 if angle < 0 else angle - 90
 
 
+def _find_best_angle(image_mono:np.ndarray) -> 'tuple[float, int]':
+  """Encontrar melhor ângulo
+  ==========================
+  Versão otmizada de `_find_tilt_angle`.
+
+  Retorna
+  -------
+  Ângulo encontrado em graus
+  """
+  # constantes definidas empiricamente
+  CANNY_SIGMA = 2.0
+  SIGMA_INCREMENT = 0.5
+  SIGMA_RANGE = np.arange(CANNY_SIGMA, 5.5, SIGMA_INCREMENT) # [2, 2.5, ..., 5]
+
+  moda_anterior = 0
+  best_result = {'moda':0, 'total':0, 'angulo':0}
+  
+  # método de decisão para o melhor resultado
+  _decide = lambda r: (-r['moda'], -r['total'], abs(r['angulo']))
+  
+  # encontrando bordas
+  img_otsu = image_mono >= threshold_otsu(image_mono)
+
+  for canny_sigma in SIGMA_RANGE:
+    edges = canny(img_otsu, sigma=canny_sigma)
+    h, theta, d = hough_line(edges)
+    _, angles, dists = hough_line_peaks(h, theta, d)
+
+    # calculando estatísticas
+    moda = mode(angles, axis=None)
+
+    actual_result = {'moda':moda.count[0], 'total':len(angles), 'angulo':moda.mode[0]}
+
+    best_result = sorted([best_result, actual_result],
+                          key=_decide)[0]
+  
+    # acima de 2 empiricamente se mostrou um bom resultado
+    # se a moda atual for pior que a anterior, entende-se que não melhorará
+    if actual_result['moda'] > 2 or actual_result['moda'] < moda_anterior:
+      break
+    moda_anterior = actual_result['moda']
+
+  angle = np.rad2deg(best_result['angulo'])
+  return angle + 90 if angle < 0 else angle - 90
+
+
 def crop_empty_edges(img:np.ndarray) -> np.ndarray:
-  '''
+  """
   Dado uma imagem 2D que após ser rotacionada apresenta "triângulos
   pretos" em suas bordas, busca cortar essas partes da imagem.
   
@@ -76,7 +124,7 @@ def crop_empty_edges(img:np.ndarray) -> np.ndarray:
 
   ## Retorna
   Uma nova imagem 2D, um recorte da original.
-  '''
+  """
   CANTOS = ['top_left', 'top_right', 'bot_left', 'bot_right']
   BORDAS_DICT = {s:0 if i < 2 else len(img) - 1 for i, s in enumerate(CANTOS)}
 
@@ -92,10 +140,10 @@ def crop_empty_edges(img:np.ndarray) -> np.ndarray:
 
 
 def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
-  '''
-  # Preencher cantos vazios
+  """Preencher cantos vazios
+  ==========================
   Recebe uma imagem (rotacionada) que possua vazios nos cantos devido
-  à rotação aplicada.
+  à rotação aplicada para serem preenchidos.
 
   ## Parâmetros
   - `img`: imagem, representada por uma matriz 2D onde cada elemento é:
@@ -108,7 +156,7 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
     * 0: preencher com média da intensidade dos píxels;
     * 1: preencher com cópia da imagem ao lado;
     * outro: opção inválida, nada será feito.
-  '''
+  """
   # (h) altura e (w) comprimento da imagem
   h, w = np.array(img.shape[0:2]) - 1
   new_img:np.ndarray = img.copy()
@@ -157,9 +205,8 @@ def crop_horizontal(img:np.ndarray,
                     metodo:int=0,
                     norm:int=LIMITE_DE_NORMALIZACAO,
                     return_thresholds:bool=False) -> 'np.ndarray | tuple[int, int]':
-  '''
-  # Crop horizontal
-
+  """Crop horizontal
+  ==================
   ## Parâmetros
   - `img`: imagem, representada como uma matriz 2D
   - `soma_horizontal`: um array (1D) onde o elemento `i` corresponde ao
@@ -173,7 +220,7 @@ def crop_horizontal(img:np.ndarray,
   - `return_thresholds`: opção de retorno (False por padrão):
     * True: tupla com os pontos de corte da imagem;
     * False: cópia da imagem recortada.
-  '''
+  """
   soma_normalizada = soma_horizontal * (norm - 1)/soma_horizontal.max()
   n = len(soma_horizontal) - 1
   hist, bins = np.histogram(soma_normalizada, range(LIMITE_DE_NORMALIZACAO), density=False)
@@ -226,7 +273,7 @@ def crop_horizontal(img:np.ndarray,
 
 
 def auto_rotate(img:np.ndarray) -> 'tuple[np.ndarray, float]':
-  '''
+  """
   Dado uma imagem 2D, binariza com limiar de OTSU, passa pelo filtro
   de canny, rotaciona com o ângulo calculado pela transformada de
   Hough e corta os espaços vazios gerados pela rotação
@@ -239,7 +286,7 @@ def auto_rotate(img:np.ndarray) -> 'tuple[np.ndarray, float]':
   - uma nova, rotacionada e recortada se o ângulo identificado for
   diferente de 0;
   - a mesma imagem se o ângulo identificado for 0.
-  '''
+  """
   # binarizando com otsu
   img_ostu = img >= threshold_otsu(img)
 
