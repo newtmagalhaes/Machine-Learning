@@ -8,15 +8,21 @@ LIMITE_DE_NORMALIZACAO = 8
 
 
 def best_rgb(img:np.ndarray) -> 'tuple[int, int]':
-  """
-  ## Parâmetros
-  - img: imagem RGB do tipo ndarray com o shape (height, width, 3).
+  """Best RGB
+  ===========
+  Dado uma imagem RGB, calcula a soma das linhas e colunas por cada
+  cor e indica qual apresenta maior variância em relação à linhas e
+  colunas.
 
-  ## Retorna
-  Uma dupla com qualquer combinação de 0, 1 ou 2, índices associados
-  respectivamente com R, G e B, indicando para cada eixo,
-  respectivamente VERTICAL e HORIZONTAL, qual a cor com maior
-  variação.
+  Parâmetros
+  ----------
+  - img: imagem RGB do tipo ndarray com o shape `(height, width, 3)`.
+
+  Retorna
+  -------
+  Uma dupla (`(a, b)`) com qualquer combinação de 0, 1 ou 2, índices
+  associados respectivamente com R, G e B, indicando para cada eixo,
+  respectivamente VERTICAL e HORIZONTAL, qual a cor com maior variância.
   """
   VERTICAL, HORIZONTAL = 0, 1
   cores = []
@@ -29,19 +35,24 @@ def best_rgb(img:np.ndarray) -> 'tuple[int, int]':
 
 
 def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
-  """RGB para mono
-  ================
-  Cria uma imagem monocromática partir de outra RGB com apenas uma das cores.
+  """RGB para cor
+  ===============
+  Cria uma imagem monocromática partir de outra RGB com apenas uma
+  das cores.
 
-  ## Parâmetros
+  Parâmetros
+  ----------
   - img: ndarray de shape (height, width, 3);
   - color: {0, 1, 2}, indicando respectivamente qual cor: R, G ou B
   se deseja criar a nova imagem.
 
-  ## Retorna
-  Uma nova imagem 2D onde cada píxel na coordenada x, y contém o
-  respectivo valor com cor indicada
-  (`img[x, y, color] == new_img[x, y]`).
+  Retorna
+  -------
+  Uma nova imagem 2D onde cada píxel na coordenada `(x, y)` contém o
+  respectivo valor com cor indicada:
+
+  >>> img[x, y, color] == new_img[x, y]
+    True
   """
   height, width, _ = img.shape
   new_img = np.zeros(shape=(height, width))
@@ -52,30 +63,65 @@ def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
   return new_img
 
 
-def _find_tilt_angle(image_edges:np.ndarray) -> float:
+def _find_tilt_angle(img_edges:np.ndarray) -> float:
   """Encontrar ângulo de inclinação
   =================================
   Recebe uma imagem 2D binarizada (após ser tratada pelo `canny`).
+  Utiliza a transfomada de Hough para identificar retas na imagem e
+  seleciona o ângulo com maior moda (em caso de empate, escolhe o menor).
 
-  ## Retorna
-  Um ângulo em graus de uma linha identficada pela transformada de
-  Hough.
+  Aviso
+  -----
+  Função em desuso devido a `_find_best_angle` porém mantida
+  devido a chamadas em notebooks antigos (possibilitando certa
+  retrocompatibilidade)
+
+  Parâmetros
+  ----------
+  - img_edges: ndarray de uma imagem 2D obtida de um filtro de borda
+  (como o `canny`).
+
+  Retorna
+  -------
+  Um ângulo em graus da reta de maior moda dentre as identficadas pela
+  transformada de Hough.
   """
-  h, theta, d = hough_line(image_edges)
-  accum, angles, dists = hough_line_peaks(h, theta, d)
-  angle = np.rad2deg(mode(angles)[0][0])
+  hspace, angles, distances = hough_line(img_edges)
+  _accum, new_angles, _dists = hough_line_peaks(hspace, angles, distances)
+  angle = np.rad2deg(mode(new_angles, axis=None).mode[0])
 
   return angle + 90 if angle < 0 else angle - 90
 
 
-def _find_best_angle(image_mono:np.ndarray) -> 'tuple[float, int]':
+def _find_best_angle(img_2d:np.ndarray) -> 'tuple[float, bool]':
   """Encontrar melhor ângulo
   ==========================
-  Versão otmizada de `_find_tilt_angle`.
+  > Versão otmizada de `_find_tilt_angle`.
+
+  Dado uma imagem 2D (`len(img_mono.shape) == 2`) executa o algoritmo
+  de Canny com diferentes valores de sigma junto da transformada de
+  Hough até obter um "resultado ótimo" para retornar, que será:
+  - O primeiro que apresentar moda >= 3; ou
+  - O melhor resultado anterior (`best_result`) caso:
+    - A moda da iteração atual seja menor que a da iteração anterior;
+    - Acabem os valores de `SIGMA_RANGE`.
+  
+  A cada iteração de valor de `SIGMA_RANGE`, `best_result` é definido
+  entre o atual e o melhor dentre iterações anteriores, o escolhido será:
+  - O que apresentar maior moda; em caso de empate
+  - O que apresentar maior quantidade de angulos; em caso de empate
+  - O que tiver ângulo mais próximo de 0.
+
+  Parâmetros
+  ----------
+  - img_2d: ndarray de imagem 2D com retas a serem identificadas.
 
   Retorna
   -------
-  Ângulo encontrado em graus
+  Dupla[angulo, confiança]:
+  - float: o ângulo de inclinação em graus da reta de maior moda;
+  - bool: True se o resultado for confiável (empiricamente observado
+  quando moda > 2), Falso quando não for.
   """
   # constantes definidas empiricamente
   CANNY_SIGMA = 2.0
@@ -86,10 +132,10 @@ def _find_best_angle(image_mono:np.ndarray) -> 'tuple[float, int]':
   best_result = {'moda':0, 'total':0, 'angulo':0}
   
   # método de decisão para o melhor resultado
-  _decide = lambda r: (-r['moda'], -r['total'], abs(r['angulo']))
+  _decide = lambda d: (-d['moda'], -d['total'], abs(d['angulo']))
   
   # encontrando bordas
-  img_otsu = image_mono >= threshold_otsu(image_mono)
+  img_otsu = img_2d >= threshold_otsu(img_2d)
 
   for canny_sigma in SIGMA_RANGE:
     edges = canny(img_otsu, sigma=canny_sigma)
@@ -111,25 +157,31 @@ def _find_best_angle(image_mono:np.ndarray) -> 'tuple[float, int]':
     moda_anterior = actual_result['moda']
 
   angle = np.rad2deg(best_result['angulo'])
-  return angle + 90 if angle < 0 else angle - 90
+  angle += 90 if angle < 0 else -90
+  return angle, best_result['moda'] > 2
 
 
 def crop_empty_edges(img:np.ndarray) -> np.ndarray:
-  """
+  """Cortar bordas vazias
+  =======================
+  > OBS: É preferível o uso de `fill_empty_edges`.
+
   Dado uma imagem 2D que após ser rotacionada apresenta "triângulos
   pretos" em suas bordas, busca cortar essas partes da imagem.
   
-  ## Parâmetros
+  Parâmetros
+  ----------
   - img: uma matriz 2D representando a imagem;
 
-  ## Retorna
-  Uma nova imagem 2D, um recorte da original.
+  Retorna
+  -------
+  Uma nova imagem 2D, um recorte da original com menos linhas.
   """
   CANTOS = ['top_left', 'top_right', 'bot_left', 'bot_right']
-  BORDAS_DICT = {s:0 if i < 2 else len(img) - 1 for i, s in enumerate(CANTOS)}
+  BORDAS_DICT = {s:(0 if i < 2 else len(img) - 1) for i, s in enumerate(CANTOS)}
 
   for i, edge in enumerate(BORDAS_DICT):
-    e = - (i % 2)
+    e = -(i % 2)
     while img[BORDAS_DICT[edge], e] == 0:
       BORDAS_DICT[edge] += 1 if i < 2 else -1
 
