@@ -97,7 +97,7 @@ def _find_tilt_angle(img_edges:np.ndarray) -> float:
 def _find_best_angle(img_2d:np.ndarray) -> 'tuple[float, bool]':
   """Encontrar melhor ângulo
   ==========================
-  > Versão otmizada de `_find_tilt_angle`.
+  > Versão otimizada de `_find_tilt_angle`.
 
   Dado uma imagem 2D (`len(img_mono.shape) == 2`) executa o algoritmo
   de Canny com diferentes valores de sigma junto da transformada de
@@ -110,7 +110,7 @@ def _find_best_angle(img_2d:np.ndarray) -> 'tuple[float, bool]':
   A cada iteração de valor de `SIGMA_RANGE`, `best_result` é definido
   entre o atual e o melhor dentre iterações anteriores, o escolhido será:
   - O que apresentar maior moda; em caso de empate
-  - O que apresentar maior quantidade de angulos; em caso de empate
+  - O que apresentar maior quantidade de ângulos; em caso de empate
   - O que tiver ângulo mais próximo de 0.
 
   Parâmetros
@@ -203,10 +203,10 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
   - `img`: imagem, representada por uma matriz 2D onde cada elemento é:
     * um número: quando a imagem está em escala de cinza, por exemplo;
     * uma tripla: onde cada número da tripla representa a intensidade
-    de cada cor (RGB, respectivavmente);
+    de cada cor (RGB, respectivamente);
   - `metodo`: inteiro definindo qual método será aplicado para
   preencher os vazios presentes nas bordas:
-    * 0: preencher com média da intensidade dos píxels;
+    * 0: preencher com média da intensidade dos pixels;
     * 1: preencher com cópia da imagem ao lado;
     * outro: opção inválida, nada será feito.
   
@@ -228,7 +228,7 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
             'bot_right':(h, -1, w, -1)}
   
   if metodo == 0:
-    # preencher com média da intensidade dos píxels da imagem
+    # preencher com média da intensidade dos pixels da imagem
     _met = lambda linha=0, coluna=0, col_inicio=0, passo=1: new_img.mean()
   elif metodo == 1:
     # preenche com cópia da imagem ao lado
@@ -243,7 +243,7 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
     row, col = row_start, col_start # contadores
     
     # Enquanto contadores estão no intervalo \
-    # AND o píxel atual for preto (grayscale:0 e RGB:(0,0,0))
+    # AND o pixel atual for preto (grayscale:0 e RGB:(0,0,0))
     while (0 <= row <= h) and new_img[row, col].all() == 0:
       while (0 <= col <= w) and new_img[row, col].all() == 0:
         col += col_direcao
@@ -415,13 +415,13 @@ def preprocessing_img(img:np.ndarray,
 
   # Rotacionando imagem se for preciso (angle != 0)
   angle, conf = _find_best_angle(img_ostu)
-  new_img = img_2d if angle == 0 else fill_empty_edges(rotate(img_2d, angle), metodo=1)
+  new_img = img_2d if angle == 0 else fill_empty_edges(rotate(img_2d, angle))
 
   # Realizando crop horizontal
   crop_img = crop_horizontal(new_img)
 
   if not return_metadata:
-    return crop_img
+    return crop_img.copy()
   else:
     return {'img':crop_img,
             'angle':angle,
