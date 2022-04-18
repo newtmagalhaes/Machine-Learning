@@ -56,6 +56,7 @@ def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
   """
   height, width, _ = img.shape
   new_img = np.zeros(shape=(height, width))
+  # new_img = img[:,:,c].copy() # testar no lugar do for
   for i in range(height):
     for j in range(width):
       new_img[i, j] = img[i, j, color]
@@ -118,7 +119,7 @@ def _find_best_angle(img_2d:np.ndarray) -> 'tuple[float, bool]':
 
   Retorna
   -------
-  Dupla[angulo, confiança]:
+  (ângulo, confiança):
   - float: o ângulo de inclinação em graus da reta de maior moda;
   - bool: True se o resultado for confiável (empiricamente observado
   quando moda > 2), Falso quando não for.
@@ -197,17 +198,21 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
   Recebe uma imagem (rotacionada) que possua vazios nos cantos devido
   à rotação aplicada para serem preenchidos.
 
-  ## Parâmetros
+  Parâmetros
+  ----------
   - `img`: imagem, representada por uma matriz 2D onde cada elemento é:
     * um número: quando a imagem está em escala de cinza, por exemplo;
     * uma tripla: onde cada número da tripla representa a intensidade
     de cada cor (RGB, respectivavmente);
-  
   - `metodo`: inteiro definindo qual método será aplicado para
   preencher os vazios presentes nas bordas:
     * 0: preencher com média da intensidade dos píxels;
     * 1: preencher com cópia da imagem ao lado;
     * outro: opção inválida, nada será feito.
+  
+  Retorna
+  -------
+  Uma cópia da imagem com os cantos vazios preenchidos.
   """
   # (h) altura e (w) comprimento da imagem
   h, w = np.array(img.shape[0:2]) - 1
@@ -253,33 +258,43 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
 
 
 def crop_horizontal(img:np.ndarray,
-                    soma_horizontal:np.ndarray,
+                    # soma_horizontal:np.ndarray,
                     metodo:int=0,
                     norm:int=LIMITE_DE_NORMALIZACAO,
                     return_thresholds:bool=False) -> 'np.ndarray | tuple[int, int]':
   """Crop horizontal
   ==================
-  ## Parâmetros
+  Dado uma imagem, gera um array com as somas de cada linha
+  normalizado pelo `LIMITE_DE_NORMALIZAÇÃO` que então é usado para
+  gerar um histograma com o qual se define o ponto de corte e ajuste
+  através do `metodo`.
+  
+  Parâmetros
+  ----------
   - `img`: imagem, representada como uma matriz 2D
   - `soma_horizontal`: um array (1D) onde o elemento `i` corresponde ao
   somatório da linha `i` (equivale a `img.sum(axis=1)`)
   - `metodo`: inteiro definindo qual método será aplicado para definir
   o ajuste (+ ou -, na direção onde os dados se concentram):
-    * 0: 0.5
-    * 1: `média+variância - base` (base = início do intervalo do pico)
-    * outro: sem ajuste
-  - `norm`: Constante para normalização da `soma_horizontal`
+    * 0: 0.5, um valor satisfatório após testes;
+    * 1: `média+variância - base` (base = início do intervalo do pico); (desuso)
+    * outro: sem ajuste (não recomendado)
+  - `norm`: Constante para normalização da `soma_horizontal` e barras
+  do histograma;
   - `return_thresholds`: opção de retorno (False por padrão):
     * True: tupla com os pontos de corte da imagem;
     * False: cópia da imagem recortada.
+  
+  Retorna
+  -------
+  Uma nova imagem recortada ou uma dupla de inteiros que marcam o
+  início e fim do intervalo de linhas com a imagem recortada
   """
+  soma_horizontal = img.sum(axis=1)
   soma_normalizada = soma_horizontal * (norm - 1)/soma_horizontal.max()
   n = len(soma_horizontal) - 1
   hist, bins = np.histogram(soma_normalizada, range(LIMITE_DE_NORMALIZACAO), density=False)
   
-  # intervalo = início do intervalo do pico do histograma SE (pos < n/2)
-  # intervalo = fim do intervalo do pico do histograma SE (pos >= n/2)
-  # intervalo = bins[pos + int(pos < n/2)]
   pos = hist.argmax()
   aux = soma_normalizada[soma_normalizada>=bins[pos]]
   bar:np.ndarray = aux[aux<bins[pos+1]]
@@ -291,6 +306,10 @@ def crop_horizontal(img:np.ndarray,
   else:
     ajuste = 0
 
+  # intervalo = início do intervalo do pico do histograma SE (pos < n/2)
+  # intervalo = fim do intervalo do pico do histograma SE (pos >= n/2)
+  # intervalo = bins[pos + int(pos < n/2)]
+  #
   # Verificando onde se concentram os dados
   esquerda = hist[:pos].sum()
   direita = hist[pos+1:].sum()
@@ -325,15 +344,18 @@ def crop_horizontal(img:np.ndarray,
 
 
 def auto_rotate(img:np.ndarray) -> 'tuple[np.ndarray, float]':
-  """
+  """Em desuso
+  ============
   Dado uma imagem 2D, binariza com limiar de OTSU, passa pelo filtro
   de canny, rotaciona com o ângulo calculado pela transformada de
   Hough e corta os espaços vazios gerados pela rotação
   
-  ## Parâmetros
+  Parâmetros
+  ----------
   - img: imagem 2D.
 
-  ## Retorna
+  Retorna
+  -------
   Uma imagem e o ângulo de rotação (em graus), no qual a imagem é:
   - uma nova, rotacionada e recortada se o ângulo identificado for
   diferente de 0;
@@ -353,6 +375,58 @@ def auto_rotate(img:np.ndarray) -> 'tuple[np.ndarray, float]':
     return new_img, angle
   else:
     return img, 0
+
+
+def preprocessing_img(img:np.ndarray,
+                      return_metadata:bool=False) -> 'np.ndarray | dict':
+  """Pré-processamento de imagens
+  ===============================
+  Dado uma imagem:
+    1. seleciona a cor (RGB) com maior variação;
+    2. binariza com limiar de OTSU;
+    3. usa a imagem binarizada no filtro de canny;
+    4. usa a imagem do filtro na transformada de Hough para
+    identificar um ângulo de inclinação;
+    5. rotaciona com o ângulo calculado;
+      5.1. se preciso, preenche os espaços vazios gerados pela rotação;
+    6. utiliza o algoritmo de `crop_horizontal`;
+    7. retorna o que foi desejado.
+
+  Parâmetros
+  ----------
+  - img:
+  - return_metadata:
+  
+  Retorna
+  -------
+  - ndarray: a imagem pré-processada;
+  - dict: um dicionário com as seguintes chaves:
+    - img:
+    - angle:
+    - color:
+    - conf:
+  """
+  # Encontrando cor com maior variação
+  _, color = best_rgb(img)
+  img_2d = rgb_to_color(img, color)
+
+  # binarizando com otsu
+  img_ostu = img_2d >= threshold_otsu(img_2d)
+
+  # Rotacionando imagem se for preciso (angle != 0)
+  angle, conf = _find_best_angle(img_ostu)
+  new_img = img_2d if angle == 0 else fill_empty_edges(rotate(img_2d, angle), metodo=1)
+
+  # Realizando crop horizontal
+  crop_img = crop_horizontal(new_img)
+
+  if not return_metadata:
+    return crop_img
+  else:
+    return {'img':crop_img,
+            'angle':angle,
+            'color':color,
+            'conf':conf}
 
 
 if __name__ == '__main__':
