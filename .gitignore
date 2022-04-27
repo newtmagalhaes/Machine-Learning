@@ -3,6 +3,7 @@
 
 # ignore large file
 ML/f02-chb/feature_set/chb.csv
+ML/f04-textura/patologias_toras/imgs/
 
 # ignore csv folders
 ML/f04-textura/**/csvs/
