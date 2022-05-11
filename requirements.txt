@@ -40,7 +40,7 @@ nbconvert @ file:///opt/conda/conda-bld/nbconvert_1641309195684/work
 nbformat @ file:///tmp/build/80754af9/nbformat_1617383369282/work
 nest-asyncio @ file:///tmp/build/80754af9/nest-asyncio_1613680548246/work
 networkx @ file:///tmp/build/80754af9/networkx_1633639043937/work
-notebook==6.0.3
+notebook==6.4.10
 numpy==1.18.1
 packaging @ file:///tmp/build/80754af9/packaging_1637314298585/work
 pandas @ file:///tmp/build/80754af9/pandas_1598371486213/work
