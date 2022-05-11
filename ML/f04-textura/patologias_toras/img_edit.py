@@ -244,8 +244,8 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
     
     # Enquanto contadores estão no intervalo \
     # AND o pixel atual for preto (grayscale:0 e RGB:(0,0,0))
-    while (0 <= row <= h) and new_img[row, col].all() == 0:
-      while (0 <= col <= w) and new_img[row, col].all() == 0:
+    while (0 <= row <= h//2 -1)  and new_img[row, col].all() == 0:
+      while (0 <= col <= w//2 -1) and new_img[row, col].all() == 0:
         col += col_direcao
 
       # Preenche uma linha horizontal do canto por vez
@@ -261,7 +261,7 @@ def crop_horizontal(img:np.ndarray,
                     # soma_horizontal:np.ndarray,
                     metodo:int=0,
                     norm:int=LIMITE_DE_NORMALIZACAO,
-                    return_thresholds:bool=False) -> 'np.ndarray | tuple[int, int]':
+                    return_thresholds:bool=False) -> 'tuple[tuple[int, int] | np.ndarray, bool]':
   """Crop horizontal
   ==================
   Dado uma imagem, gera um array com as somas de cada linha
@@ -316,31 +316,45 @@ def crop_horizontal(img:np.ndarray,
   if esquerda >= direita:
     ajuste *= -1
     intervalo = bins[pos]
-    stop_cond = lambda x, y_bar: x < y_bar
+    # stop_cond = lambda x, y_bar: x < y_bar
   else:
     intervalo = bins[pos+1]
-    stop_cond = lambda x, y_bar: x > y_bar
+    # stop_cond = lambda x, y_bar: x > y_bar
   
   limiar = intervalo + ajuste
 
-  # Percorrendo imagem para traçar corte
-  # de cima para baixo
+  # Percorrendo imagem para traçar corte:
+  # i=0: do início ao fim da imagem; pos_corte[0] é incrementado
+  # i=1: do fim ao início da imagem; pos_corte[1] é decrementado
   pos_corte = [0, n]
-  for j, v in enumerate(soma_normalizada):
-    if stop_cond(v, limiar):
-      pos_corte[0] = j
-      break
-  # de baixo para cima
-  for j, v in enumerate(soma_normalizada[::-1]):
-    if stop_cond(v, limiar):
-      pos_corte[1] = n - j
-      break
+  for i, step in enumerate([1, -1]):
+    minimo = norm
+    for j, v in enumerate(soma_normalizada[::step]):
+      dif = abs(v - limiar)
+      if dif > minimo:
+        # a iteração anterior foi o ponto mais próximo do limiar
+        pos_corte[i] += (j-1) * step
+        break
+      else:
+        minimo = dif
+    # for j, v in enumerate(soma_normalizada[::step]):
+    #   if stop_cond(v, limiar):
+    #     pos_corte[i] += j * step
+    #     break
+
+  # altura empiricamente aceitável para analisar a imagem
+  TAMANHO_ACEITAVEL = 20
+  conf = True
+  start, stop = pos_corte
+  if stop - start < TAMANHO_ACEITAVEL:
+    # A imagem não será alterada
+    start, stop = [0, n]
+    conf = False
   
   if return_thresholds:
-    return pos_corte
+    return ((start, stop), conf)
   else:
-    start, stop = pos_corte
-    return img[start:stop].copy()
+    return (img[start:stop].copy(), conf)
 
 
 def auto_rotate(img:np.ndarray) -> 'tuple[np.ndarray, float]':
@@ -404,7 +418,8 @@ def preprocessing_img(img:np.ndarray,
     - img:
     - angle:
     - color:
-    - conf:
+    - conf_angle:
+    - conf_crop:
   """
   # Encontrando cor com maior variação
   _, color = best_rgb(img)
@@ -414,11 +429,11 @@ def preprocessing_img(img:np.ndarray,
   img_ostu = img_2d >= threshold_otsu(img_2d)
 
   # Rotacionando imagem se for preciso (angle != 0)
-  angle, conf = _find_best_angle(img_ostu)
-  new_img = img_2d if angle == 0 else fill_empty_edges(rotate(img_2d, angle))
+  angle, conf_angle = _find_best_angle(img_ostu)
+  new_img = img_2d if angle == 0 else fill_empty_edges(rotate(img_2d, angle), 1)
 
   # Realizando crop horizontal
-  crop_img = crop_horizontal(new_img)
+  crop_img, crop_conf = crop_horizontal(new_img)
 
   if not return_metadata:
     return crop_img.copy()
@@ -426,7 +441,8 @@ def preprocessing_img(img:np.ndarray,
     return {'img':crop_img,
             'angle':angle,
             'color':color,
-            'conf':conf}
+            'conf_angle':conf_angle,
+            'conf_crop':crop_conf}
 
 
 if __name__ == '__main__':
