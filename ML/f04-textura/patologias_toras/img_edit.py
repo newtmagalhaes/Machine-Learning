@@ -316,10 +316,10 @@ def crop_horizontal(img:np.ndarray,
   if esquerda >= direita:
     ajuste *= -1
     intervalo = bins[pos]
-    # stop_cond = lambda x, y_bar: x < y_bar
+    stop_cond = lambda x, y_bar: x < y_bar
   else:
     intervalo = bins[pos+1]
-    # stop_cond = lambda x, y_bar: x > y_bar
+    stop_cond = lambda x, y_bar: x > y_bar
   
   limiar = intervalo + ajuste
 
@@ -328,19 +328,19 @@ def crop_horizontal(img:np.ndarray,
   # i=1: do fim ao início da imagem; pos_corte[1] é decrementado
   pos_corte = [0, n]
   for i, step in enumerate([1, -1]):
-    minimo = norm
-    for j, v in enumerate(soma_normalizada[::step]):
-      dif = abs(v - limiar)
-      if dif > minimo:
-        # a iteração anterior foi o ponto mais próximo do limiar
-        pos_corte[i] += (j-1) * step
-        break
-      else:
-        minimo = dif
+    # minimo = norm
     # for j, v in enumerate(soma_normalizada[::step]):
-    #   if stop_cond(v, limiar):
-    #     pos_corte[i] += j * step
+    #   dif = abs(v - limiar)
+    #   if dif > minimo:
+    #     # a iteração anterior foi o ponto mais próximo do limiar
+    #     pos_corte[i] += (j-1) * step
     #     break
+    #   else:
+    #     minimo = dif
+    for j, v in enumerate(soma_normalizada[::step][:n//2+1]):
+      if stop_cond(v, limiar):
+        pos_corte[i] += j * step
+        break
 
   # altura empiricamente aceitável para analisar a imagem
   TAMANHO_ACEITAVEL = 20
