@@ -128,11 +128,12 @@ def _find_best_angle(img_2d:np.ndarray) -> 'tuple[float, bool]':
   CANNY_SIGMA = 2.0
   SIGMA_INCREMENT = 0.5
   SIGMA_RANGE = np.arange(CANNY_SIGMA, 5.5, SIGMA_INCREMENT) # [2, 2.5, ..., 5]
+  HOUGH_ANGLE_RANGE = np.linspace(-np.pi/4, np.pi/4, num=180, endpoint=False)
 
   moda_anterior = 0
   best_result = {'moda':0, 'total':0, 'angulo':0}
   
-  # método de decisão para o melhor resultado
+  # Método de decisão para o melhor resultado;
   _decide = lambda d: (-d['moda'], -d['total'], abs(d['angulo']))
   
   # encontrando bordas
@@ -140,7 +141,8 @@ def _find_best_angle(img_2d:np.ndarray) -> 'tuple[float, bool]':
 
   for canny_sigma in SIGMA_RANGE:
     edges = canny(img_otsu, sigma=canny_sigma)
-    h, theta, d = hough_line(edges)
+    # Afunilando intervalo da transformada de [-90°, 90°] para [-45°, 45°]
+    h, theta, d = hough_line(edges, HOUGH_ANGLE_RANGE)
     _, angles, dists = hough_line_peaks(h, theta, d)
 
     # calculando estatísticas
@@ -158,7 +160,7 @@ def _find_best_angle(img_2d:np.ndarray) -> 'tuple[float, bool]':
     moda_anterior = actual_result['moda']
 
   angle = np.rad2deg(best_result['angulo'])
-  angle += 90 if angle < 0 else -90
+  angle += 45 if angle < 0 else -45
   return angle, best_result['moda'] > 2
 
 
@@ -244,6 +246,8 @@ def fill_empty_edges(img:np.ndarray, metodo:int=0) -> np.ndarray:
     
     # Enquanto contadores estão no intervalo \
     # AND o pixel atual for preto (grayscale:0 e RGB:(0,0,0))
+    # for line_index, line in enumerate(new_img[row:h-row:row_direcao]):
+    #   pass
     while (0 <= row <= h//2 -1)  and new_img[row, col].all() == 0:
       while (0 <= col <= w//2 -1) and new_img[row, col].all() == 0:
         col += col_direcao
@@ -289,6 +293,8 @@ def crop_horizontal(img:np.ndarray,
   -------
   Uma nova imagem recortada ou uma dupla de inteiros que marcam o
   início e fim do intervalo de linhas com a imagem recortada
+
+  ..TODO:: Refatorar função
   """
   soma_horizontal = img.sum(axis=1)
   soma_normalizada = soma_horizontal * (norm - 1)/soma_horizontal.max()
@@ -328,6 +334,12 @@ def crop_horizontal(img:np.ndarray,
   # i=1: do fim ao início da imagem; pos_corte[1] é decrementado
   pos_corte = [0, n]
   for i, step in enumerate([1, -1]):
+    # O primeiro slice define se o vetor é invertido ou não
+    # O segundo slice limita a varredura do vetor até sua metade
+    for j, v in enumerate(soma_normalizada[::step][:n//2]):
+      if stop_cond(v, limiar):
+        pos_corte[i] += j * step
+        break
     # minimo = norm
     # for j, v in enumerate(soma_normalizada[::step]):
     #   dif = abs(v - limiar)
@@ -337,10 +349,6 @@ def crop_horizontal(img:np.ndarray,
     #     break
     #   else:
     #     minimo = dif
-    for j, v in enumerate(soma_normalizada[::step][:n//2+1]):
-      if stop_cond(v, limiar):
-        pos_corte[i] += j * step
-        break
 
   # altura empiricamente aceitável para analisar a imagem
   TAMANHO_ACEITAVEL = 20
