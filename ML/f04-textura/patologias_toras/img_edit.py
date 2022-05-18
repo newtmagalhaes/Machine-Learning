@@ -51,17 +51,17 @@ def rgb_to_color(img:np.ndarray, color:int) -> np.ndarray:
   Uma nova imagem 2D onde cada píxel na coordenada `(x, y)` contém o
   respectivo valor com cor indicada:
 
-  >>> img[x, y, color] == new_img[x, y]
-    True
+  >>> img[x, y, color] == rgb_to_color(img, color)[x, y]
+  True
   """
-  height, width, _ = img.shape
-  new_img = np.zeros(shape=(height, width))
-  # new_img = img[:,:,c].copy() # testar no lugar do for
-  for i in range(height):
-    for j in range(width):
-      new_img[i, j] = img[i, j, color]
+  # # Código antigo
+  # height, width, _ = img.shape
+  # new_img = np.zeros(shape=(height, width))
+  # for i in range(height):
+  #   for j in range(width):
+  #     new_img[i, j] = img[i, j, color]
   
-  return new_img
+  return img[:,:,color].copy()
 
 
 def _find_tilt_angle(img_edges:np.ndarray) -> float:
@@ -454,7 +454,24 @@ def preprocessing_img(img:np.ndarray,
 
 
 if __name__ == '__main__':
-  a = [1, 2, 3]
-  print(f'a: {a}\t-\ttipo: {type(a)}')
-  b = tuple(a)
-  print(f'b: {b}\t-\ttipo: {type(b)}')
+  import seaborn as sns
+  from matplotlib import pyplot as plt
+  from skimage.data import rocket
+  from skimage.feature import local_binary_pattern
+  
+  plt.imshow(rocket())
+  plt.show()
+
+  lbp_img = local_binary_pattern(
+    image=rgb_to_color(rocket(), 2),
+    P=8,
+    R=1,
+    method='nri_uniform'
+  )
+
+  plt.gray()
+  plt.imshow(lbp_img)
+  plt.show()
+
+  sns.countplot(y=lbp_img.flatten())
+  plt.show()
