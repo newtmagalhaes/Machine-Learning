@@ -58,7 +58,7 @@ partd==1.2.0
 patsy==0.5.2
 pexpect==4.8.0
 pickleshare==0.7.5
-Pillow==9.0.1
+Pillow==9.3.0
 pip==21.2.2
 prometheus-client==0.13.1
 prompt-toolkit==3.0.20
