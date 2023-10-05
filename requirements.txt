@@ -19,7 +19,7 @@ entrypoints==0.4
 fastjsonschema==2.15.1
 fonttools==4.25.0
 fsspec==2022.2.0
-imagecodecs==2021.8.26
+imagecodecs==2023.9.18
 imageio==2.9.0
 importlib-metadata==4.11.3
 importlib-resources==5.2.0
